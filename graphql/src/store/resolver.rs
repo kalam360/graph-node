@@ -76,12 +76,9 @@ impl StoreResolver {
     ) -> Result<Self, QueryExecutionError> {
         let store_clone = store.cheap_clone();
         let deployment2 = deployment.clone();
-        let block_ptr = graph::spawn_blocking_allow_panic(move || {
-            Self::locate_block(store_clone.as_ref(), bc, deployment2.clone())
-        })
-        .await
-        .map_err(|e| QueryExecutionError::Panic(e.to_string()))
-        .and_then(|x| x)?; // Propagate panics.
+        let block_ptr = Self::locate_block(store_clone.as_ref(), bc, deployment2.clone())
+            .await
+            .map_err(|e| QueryExecutionError::Panic(e.to_string()))?;
 
         let has_non_fatal_errors = store
             .has_non_fatal_errors(Some(block_ptr.block_number()))
@@ -107,7 +104,7 @@ impl StoreResolver {
             .unwrap_or(BLOCK_NUMBER_MAX)
     }
 
-    fn locate_block(
+    async fn locate_block(
         store: &dyn QueryStore,
         bc: BlockConstraint,
         subgraph: DeploymentHash,
@@ -148,6 +145,7 @@ impl StoreResolver {
             }
             BlockConstraint::Number(number) => store
                 .block_ptr()
+                .await
                 .map_err(|e| StoreError::from(e).into())
                 .and_then(|ptr| {
                     check_ptr(subgraph, ptr, number)?;
@@ -161,10 +159,12 @@ impl StoreResolver {
                 }),
             BlockConstraint::Min(number) => store
                 .block_ptr()
+                .await
                 .map_err(|e| StoreError::from(e).into())
                 .and_then(|ptr| check_ptr(subgraph, ptr, number)),
             BlockConstraint::Latest => store
                 .block_ptr()
+                .await
                 .map_err(|e| StoreError::from(e).into())
                 .and_then(|ptr| {
                     let ptr = ptr.expect("we should have already checked that the subgraph exists");

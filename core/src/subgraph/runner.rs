@@ -60,12 +60,12 @@ async fn new_block_stream<C: Blockchain>(
         false => BUFFERED_BLOCK_STREAM_SIZE,
     };
 
-    let current_ptr = inputs.store.block_ptr();
+    let current_ptr = inputs.store.block_ptr().await;
 
     let block_stream = match is_firehose {
         true => chain.new_firehose_block_stream(
             inputs.deployment.clone(),
-            inputs.store.block_cursor(),
+            inputs.store.block_cursor().await,
             inputs.start_blocks.clone(),
             current_ptr,
             Arc::new(filter.clone()),
@@ -117,7 +117,7 @@ where
         // If a subgraph failed for deterministic reasons, before start indexing, we first
         // revert the deployment head. It should lead to the same result since the error was
         // deterministic.
-        if let Some(current_ptr) = self.inputs.store.block_ptr() {
+        if let Some(current_ptr) = self.inputs.store.block_ptr().await {
             if let Some(parent_ptr) = self
                 .inputs
                 .triggers_adapter
@@ -190,7 +190,7 @@ where
                         //
                         // Safe unwrap because in a Revert event we're sure the subgraph has
                         // advanced at least once.
-                        let subgraph_ptr = self.inputs.store.block_ptr().unwrap();
+                        let subgraph_ptr = self.inputs.store.block_ptr().await.unwrap();
                         if revert_to_ptr.number >= subgraph_ptr.number {
                             info!(&logger, "Block to revert is higher than subgraph pointer, nothing to do"; "subgraph_ptr" => &subgraph_ptr, "revert_to_ptr" => &revert_to_ptr);
                             continue;
@@ -899,7 +899,7 @@ async fn delete_subgraph_firehose_cursor(logger: &Logger, store: &dyn WritableSt
     let mut backoff = ExponentialBackoff::new(30 * SECOND, *SUBGRAPH_ERROR_RETRY_CEIL_SECS);
 
     loop {
-        match store.delete_block_cursor() {
+        match store.delete_block_cursor().await {
             Ok(_) => return,
             Err(_) => {
                 error!(
